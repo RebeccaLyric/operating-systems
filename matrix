@@ -1,0 +1,276 @@
+#!/bin/bash
+
+#exit and delete temp files if CTRL-C
+trap "rm -f temp*; rm -f input*; echo 'SIGINT received: Deleting temp files then exiting!'; exit 1" INT
+
+###############################################################################
+# dims: calculate and output matrix dimensions (numRows numCols)
+# using for and while loops
+###############################################################################
+function dims()
+{
+    numRows=0
+    numCols=0
+
+    #count words on first line
+    read -r firstLine < $matrix1
+    for i in $firstLine
+    do
+        numCols=`expr $numCols + 1`
+    done
+
+    #read rows from all lines
+    while read nextLine
+    do
+        numRows=`expr $numRows + 1`
+    done < $matrix1
+
+    echo -e "$numRows $numCols"
+}
+
+###############################################################################
+# transpose: reflect the elements of the matrix along the main diagonal
+# (MxN --> NxM, values on main diagonal remain unchanged)
+###############################################################################
+function transpose()
+{
+    tempCol="tempcolfile"
+    tempRow="temprowfile"
+
+    numCols=$(head -n1 $matrix1 | wc -w)             #count words on first line
+    numRows=$(cat $matrix1 | wc -l )                 #count newlines
+
+    c=1                                             #column index
+    while [[ c -le "$numCols" ]]                    #convert to one long column
+    do
+        cut -f$c $matrix1 | tr '\t' '\n' >> $tempCol$$
+        c=`expr "$c" + 1`
+    done < $matrix1
+
+    r=1                                             #row index
+    while read nextNum                              #for each row of column file
+    do
+        if [[ "$r" -eq "$numRows" ]]                #if row index is same as original num rows
+        then
+            echo -e "$nextNum" >> $tempRow$$        #keep newline
+            r=1
+        else                                        #else change to tab
+            echo -e "$nextNum" | tr '\n' '\t' >> $tempRow$$
+            r=`expr $r + 1`                         #and reset row index
+        fi
+    done < $tempCol$$
+
+    cat $tempRow$$                                  
+}
+
+###############################################################################
+# mean: take an MxN and return a 1xN row vector
+# the 1st element of the vector is the mean of the 1st column, etc.
+# ***.5 values are rounded to zero
+###############################################################################
+function mean()
+{
+    tempRows="temprowsfile"
+    tempMeans="tempmeansfile"
+    numRows=$(cat $matrix1 | wc -l )                 #num rows is the divisor
+
+    # convert columns to rows and get mean from rows
+    transpose $matrix1 > $tempRows$$                 
+    while read nextLine                             
+    do
+        sum=0                                       #reset sum
+        for i in $nextLine                          #get sum for each row
+        do
+            sum=`expr $sum + $i`
+        done
+
+        #calculate rounded mean and echo to file without newline
+        mean=$(( (sum + (numRows/2) * ( (sum>0) * 2-1 )) / numRows ))
+        echo -en "$mean\t" >> $tempMeans$$
+
+    done < $tempRows$$
+   
+    noTab=$(cat $tempMeans$$ | rev | cut -c2- | rev)    #delete trailing tab
+    echo -e "$noTab" > $tempMeans$$                     #newline added here
+    cat $tempMeans$$
+}
+
+###############################################################################
+# add: take two MxN matrices and add element-by-element 
+# result is MxN matrix
+# returns an error if matrices are not equal dimensions
+###############################################################################
+function add()
+{
+    tempSums="tempsumsfile"
+    
+    #check that both matrices have the same dimensions
+    m1dims=$(./matrix dims $matrix1)
+    m2dims=$(./matrix dims $matrix2)
+    if [[ "$m1dims" != "$m2dims" ]]
+    then
+        >&2 echo "Oh no, both matrices must have the same dimensions"
+        exit 1
+    fi
+
+    numCols=$( echo "$m1dims" | cut -d" " -f2 )       # get num columns from dims
+
+    #read each line of both matrices to get corresponding values to add
+    while read -u3 m1 && read -u4 m2            #while loop source: 
+    do                                          #https://piazza.com/class/k0n1xcux3ah4r?cid=45
+        c=1                                     #column index
+        
+        while [[ $c -le $numCols  ]]            #for all columns
+        do
+            m1val=$( echo "$m1" | cut -f$c )    #cut value at column index
+            m2val=$( echo "$m2" | cut -f$c )
+            sum=`expr $m1val + $m2val`          #add values
+
+            if [[ $c -eq $numCols  ]]           #print results 
+            then
+                echo "$sum" >> $tempSums$$      #with newline at columns
+            else
+                echo -en "$sum\t" >> $tempSums$$ #else tab
+            fi
+
+            c=`expr $c + 1`                     
+        done
+
+    done 3<"$matrix1" 4<"$matrix2"
+
+    cat $tempSums$$
+}
+
+###############################################################################
+# multiply: take an MxN and NxP matrix 
+# checks dimensions
+# and produces an MxP matrix
+###############################################################################
+function multiply()
+{
+    tempMult="tempmultfile"
+
+    #check that matrices have compatible dimensions (matrix1 cols == matrix2 rows)
+    m1dims=$(./matrix dims $matrix1)                 
+    m2dims=$(./matrix dims $matrix2)
+    m1rows=$( echo "$m1dims" | cut -d" " -f1 )
+    m1cols=$( echo "$m1dims" | cut -d" " -f2 )      
+    m2rows=$( echo "$m2dims" | cut -d" " -f1 )
+    m2cols=$( echo "$m2dims" | cut -d" " -f2 )
+
+    if [[ "$m1cols" != "$m2rows" ]]
+    then
+        >&2 echo "Oh no, these two matrices do not have compatible dimensions"
+        exit 1
+    fi
+
+    #transpose m2 to read m2cols as rows 
+    read -d' ' -a m2vals < <(./matrix transpose $matrix2)    
+
+    #read values from matrices and do calculations
+    m1idx=0                                         #index of m1 col
+    outputCol=0                                     #count which col of output
+
+    while read m1vals                               #for all rows of m1
+    do
+        m2idx=0                                     #read all m2 values
+        while [[ $m2idx -lt ${#m2vals[@]} ]]        
+        do
+
+            #accumulate sum of m1 values *  m2 values 
+            m1cut=`expr $m1idx + 1`                 
+            m1val=$( echo "$m1vals" | cut -f$m1cut )  
+            sum=$(( sum + ( $m1val * ${m2vals[m2idx]}) ))
+
+            #print sum at end of each m1 col count
+            if [[ $(( $m1idx % $m1cols)) -eq $(( $m1cols - 1 )) ]]
+            then
+                outputCol=`expr $outputCol + 1`
+                if [[ $outputCol -eq $m2cols ]]
+                then
+                    echo "$sum" >> $tempMult$$      #print with newline at end of row
+                    outputCol=0                     #reset output column
+                else
+                    echo -en "$sum\t" >> $tempMult$$    #else print with tab
+                fi
+                sum=0                               #reset sum
+            fi
+
+            #move back to beginning of m1row if still reading m2 col values
+            m1idx=`expr $m1idx + 1`
+            m2idx=`expr $m2idx + 1`
+            if [[ $m1idx -eq $m1cols ]]
+            then
+                m1idx=`expr $m1idx - $m1cols`
+            fi
+        done
+
+    done < $matrix1
+
+    cat $tempMult$$
+}
+
+###############################################################################
+# testfile: check whether a file exists and is readable 
+###############################################################################
+function testfile()
+{
+    if [[ ! -f $matrix1 ]] || [[ ! -r $matrix1 ]]
+    then
+        >&2 echo -e "Oh no, $matrix1 is not a readable file"
+        exit 1
+    fi
+}
+
+###############################################################################
+# process input and execute specified function (main)
+###############################################################################
+matrix1="input$$"
+function=$1                                     #1st argument is function name
+
+#check for one-matrix functions (dims, transpose, mean)
+if [[ $function == "dims" ]] || [[ $function == "transpose" ]] || [[ $function == "mean" ]]
+then
+    #error if more than 2 arguments
+    if [[ $# -gt 2  ]]
+    then
+        >&2 echo -e "Oh no, $function can process only one matrix"
+        exit 1
+
+    #if one argument, get data from stdin
+    elif [ "$#" == "1" ]
+    then
+        cat > "$matrix1"
+
+    #else if two arguments, get data from $2
+    else
+        matrix1=$2
+        testfile matrix1                         #test input readability
+    fi
+
+    $function matrix1                            #execute function
+
+#check for two-matrix functions (add, multiply)
+elif [[ $function == "add"  ]] || [[ $function == "multiply" ]]
+then
+    if [[ $# -ne 3  ]]
+    then
+        >&2 echo -e "Oh no, $function needs two matrices as input"
+        exit 1
+    fi
+
+    matrix1=$2                                       
+    matrix2=$3
+    testfile matrix1                             #test input readability
+    testfile matrix2                         
+    $function matrix1 matrix2                     #execute function
+
+#else function is not known 
+else
+    >&2 echo "Oh no, I can only do dims, transpose, mean, add, and multiply operations."
+    exit 1
+fi
+
+#delete temporary files
+rm -f temp*
+rm -f input*
