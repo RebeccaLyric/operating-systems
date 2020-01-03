@@ -1,0 +1,17 @@
+# Mac OS and Debug files
+.DS_Store
+*.swp
+*.dSYM/
+*.cbp
+*/cmake-build-debug/*
+
+# CLion files
+*.iml
+*.xml
+
+# Object files and executables
+*.o
+*.out
+
+# Generated text files
+*.txt
