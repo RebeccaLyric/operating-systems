@@ -54,7 +54,8 @@ void ReadConnections(FILE *inputFile, int roomIndex);
 struct room* FindStartRoom();
 void PrintLocationInfo(struct room *currentRoom);
 void PrintEndGameInfo(int pathTaken[], int stepCount);
-struct room* GetRoomFromUser();
+struct room *GetRoomFromUser(struct room *currentRoom);
+char* FindRoomNameFromId(int roomId);
 void PlayGame();
 
 //Function prototypes - keep time
@@ -109,7 +110,6 @@ void InitBalletRooms()
         for (j = 0; j < MAX_CONNECTIONS; j++) {
             balletRooms[i].outboundConnections[j] = NULL;
         }
-
     }
 }
 
@@ -217,7 +217,7 @@ void IsNewest(struct dirent *currentFile, int *previousNewTime, char *newestFile
  * Open a file with the name passed in and return the file pointer
  * Does not close file
 *******************************************************************************/
-FILE * OpenFile(char *fileName)
+FILE* OpenFile(char *fileName)
 {
     FILE* fp = NULL;
     fp = fopen(fileName, "r");
@@ -337,15 +337,25 @@ struct room* FindStartRoom()
 
 /******************************************************************************
  * Find room struct by passed-in room name
+ * Search passed-in current room connections
  * Returns null room if no matching room found
 *******************************************************************************/
-struct room* FindRoomStructFromName(char *roomName)
+struct room *FindRoomStructFromName(char *roomName, struct room *currentRoom)
 {
-    int i = 0;
-    for (i = 0; i < NUM_ROOMS; i++) {
-        if (strcmp(balletRooms[i].name, roomName) == 0)
+    int i = -5;
+    int j = -5;
+
+    // Check all current room connections for matching room name
+    for (i = 0; i < currentRoom->numOutboundConnections; i++) {
+
+        // If found matching room name, find corresponding room struct
+        if (strcmp(currentRoom->outboundConnections[i]->name, roomName) == 0)
         {
-            return &balletRooms[i];
+            for (j = 0; j < NUM_ROOMS; j++) {
+                if (strcmp(balletRooms[j].name, roomName) == 0) {
+                    return &balletRooms[j];
+                }
+            }
         }
     }
 
@@ -358,7 +368,7 @@ struct room* FindRoomStructFromName(char *roomName)
 *******************************************************************************/
 char* FindRoomNameFromId(int roomId)
 {
-    int i;
+    int i = -5;
     for (i = 0; i < NUM_ROOMS; i++) {
         if (balletRooms[i].id == roomId) {
             return balletRooms[i].name;
@@ -401,7 +411,7 @@ void PrintEndGameInfo(int pathTaken[], int stepCount)
     int i = -5;
 
     printf("YOU HAVE FOUND THE END ROOM. CONGRATULATIONS!\n"
-           "YOU TOOK %d STEPS. YOUR PATH TO VICTORY WAS: \n", stepCount);
+           "YOU TOOK %d STEP(S). YOUR PATH TO VICTORY WAS: \n", stepCount);
 
     for (i = 0; i < stepCount; i++) {
         printf("%s\n", FindRoomNameFromId(pathTaken[i]));
@@ -413,7 +423,7 @@ void PrintEndGameInfo(int pathTaken[], int stepCount)
  * If user enters "time", set null room type to "time" and return null room
  * Return room struct matching user input or null if none matching
 *******************************************************************************/
-struct room* GetRoomFromUser()
+struct room* GetRoomFromUser(struct room* currentRoom)
 {
     char* userInput = NULL;
     size_t bufferSize = 0;
@@ -434,7 +444,7 @@ struct room* GetRoomFromUser()
     }
 
     // Else find matching room, free user input memory, and return matching room
-    matchingRoom = FindRoomStructFromName(userInput);
+    matchingRoom = FindRoomStructFromName(userInput, currentRoom);
     free(userInput);
     return matchingRoom;
 }
@@ -534,7 +544,7 @@ void PlayGame()
         PrintLocationInfo(currentRoom);
 
         //Move to next room and check if not valid choice
-        GET_ROOM: returnedRoom = GetRoomFromUser();
+        GET_ROOM: returnedRoom = GetRoomFromUser(currentRoom);
         if ( (strcmp(returnedRoom->name, "null_room") == 0) &&
              (strcmp(returnedRoom->roomType, "time") != 0)) {
             printf("\nHUH? I DON’T UNDERSTAND THAT ROOM. TRY AGAIN.\n\n");
