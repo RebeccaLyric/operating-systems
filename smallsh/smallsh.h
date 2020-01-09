@@ -26,6 +26,7 @@
 #define MAX_ARGS 512
 
 #define CMD_PROMPT ": "
+#define EXPAND_PID "$$"
 #define START_CAPACITY 3
 
 bool continueExecution = true;
@@ -57,7 +58,7 @@ void catchSIGTSTP(int signalNum);
 char* getWorkingDirectory(char *directoryName);
 void runShell();
 char* promptCommandLine();
-char* expandPID(char* inputString, int numChars);
+char *expandPID(char *inputString);
 void clearCommandArgs(char **commandArgs, int numArgs);
 void saveCommandArgs(char *userInput, char** commandArgs);
 void processCommandArgs(char** commandArgs);

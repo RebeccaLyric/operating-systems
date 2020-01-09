@@ -149,7 +149,7 @@ char* promptCommandLine()
 
     //Delete newline and expand $$ to PID
     userInput[numChars-1] = '\0';
-    userInput = expandPID(userInput, numChars);
+    userInput = expandPID(userInput);
 
     return userInput;
 }
@@ -158,7 +158,7 @@ char* promptCommandLine()
  * Takes an input string and its character count
  * Expands $$ to PID before returning string
 *******************************************************************************/
-char* expandPID(char* inputString, int numChars)
+char *expandPID(char *inputString)
 {
     char* pid = calloc(32, sizeof(char));
     char* temp = calloc(MAX_CHARS, sizeof(char));
