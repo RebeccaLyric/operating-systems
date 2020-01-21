@@ -12,6 +12,11 @@
 # Object files and executables
 *.o
 *.out
+smallsh
 
 # Generated text files
 *.txt
+
+# Grading scripts
+junk*
+*testscript
