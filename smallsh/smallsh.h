@@ -18,7 +18,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-#define bool int
+#define bool sig_atomic_t
 #define true 1
 #define false 0
 
