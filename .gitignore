@@ -14,9 +14,9 @@
 *.out
 smallsh
 
-# Generated text files
+# Generated text files and grading scripts
 *.txt
-
-# Grading scripts
 junk*
-*testscript
+plaintext*
+*script
+*result*
